@@ -1,0 +1,24 @@
+{
+  "name": "gpsruta-luxury",
+  "private": true,
+  "version": "3.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.45.4",
+    "lucide-react": "0.542.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "3.1.2",
+    "xlsx": "0.18.5",
+    "nodemailer": "7.0.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "5.0.2",
+    "vite": "7.1.3"
+  }
+}
