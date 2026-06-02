@@ -77,7 +77,7 @@ function Logo(){return <div className="logo"><div className="pin">⌖</div><div>
 function Login({onLogin}){const[p,setP]=useState(""),[e,setE]=useState("");return <div className="loginPage"><form className="loginCard" onSubmit={x=>{x.preventDefault();if(p===PASS){sessionStorage.setItem(SESSION,"1");onLogin()}else setE("Clave incorrecta. Clave demo: 1234")}}><Logo/><h2>Ingreso Seguro</h2><p>Sistema financiero y cobranza</p><div className="loginInput"><Lock size={18}/><input type="password" value={p} onChange={x=>setP(x.target.value)} placeholder="Clave de acceso"/></div>{e&&<div className="error">{e}</div>}<button className="primary full"><ShieldCheck size={18}/>Ingresar</button></form></div>}
 function K({t,v,s,icon:Icon,tone="green"}){return <div className="card kpi"><div className={`kpiIcon ${tone}`}><Icon size={32}/></div><div><small>{t}</small><h3>{v}</h3><p>{s}</p></div></div>}
 function Fields({obj,set,fields}){return <div className="formGrid">{fields.map(f=><input key={f} value={obj[f]||""} onChange={e=>set({...obj,[f]:e.target.value})} placeholder={f.toUpperCase()} type={["fecha","emision","vencimiento"].includes(f)?"date":f==="monto"?"number":"text"}/>)}</div>}
-function InvTable({items,client,edit,del,data={},attachFile=()=>{},canSendInvoice=()=>true}){return <div className="tableWrap"><table><thead><tr><th>Factura</th><th>Cliente</th><th>Vence</th><th>Mes/Año</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{items.map(i=>{let c=client(i.clienteId),s=ist(i),Icon=s.I;return <tr key={i.id}><td><b>{i.factura}</b></td><td>{c?.nombre}</td><td>{i.vencimiento}</td><td>{ml(mk(i.vencimiento))}</td><td>{money(i.monto)}</td><td><span className={`status ${s.c}`}><Icon size={14}/>{s.l}</span></td><td><div className="actions"><label className="icon attachMini" title="Adjuntar factura"><Paperclip size={17}/><input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" onChange={e=>attachFile(i.id,e.target.files?.[0])}/></label><a className="icon whatsapp" title="Recordatorio WhatsApp" href="#" onClick={e=>{e.preventDefault();openWhatsAppReminder(i,c)}}><W/></a><a className="icon mail" title="Recordatorio correo manual" href="#" onClick={e=>{e.preventDefault();openEmailReminderFixed(i,c)}}><Mail size={17}/></a><button className="icon autoMailIcon" title="Recordatorio automático Outlook" onClick={()=>{requirePdfForCobranza(i);sendAutoReminder(i,c)}}>AUTO</button><button className={`icon autoInvoiceIcon ${!data.attachments?.[i.id]?"disabled":""}`} title="Enviar factura automática Outlook" onClick={()=>sendAutoInvoice(i,c)}>PDF</button><a className={`icon invoiceSend ${!data.attachments?.[i.id]?"disabled":""}`} title="Enviar factura WhatsApp" href="#" onClick={e=>{e.preventDefault();openWhatsAppInvoiceSafe(i,c)}}>FAC</a><button className="icon edit" onClick={()=>edit(i)}><Edit size={17}/></button><button className="icon trash" onClick={()=>del(i.id)}><Trash2 size={17}/></button>{data.attachments?.[i.id]?<span className={`attachedOk pdfSemaforo ${data.attachments[i.id].sent?"yellow":"green"}`}>{data.attachments[i.id].sent?"🟡 PDF enviado":"🟢 PDF cargado"}</span>:<span className="attachedOk pdfSemaforo red">🔴 Sin PDF</span>}</div></td></tr>})}</tbody></table></div>}
+function InvTable({items,client,edit,del,data={},attachFile=()=>{},canSendInvoice=()=>true}){return <div className="tableWrap"><table><thead><tr><th>Factura</th><th>Cliente</th><th>Vence</th><th>Mes/Año</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{items.map(i=>{let c=client(i.clienteId),s=ist(i),Icon=s.I;return <tr key={i.id}><td><b>{i.factura}</b></td><td>{c?.nombre}</td><td>{i.vencimiento}</td><td>{ml(mk(i.vencimiento))}</td><td>{money(i.monto)}</td><td><span className={`status ${s.c}`}><Icon size={14}/>{s.l}</span></td><td><div className="actions"><label className="icon attachMini" title="Adjuntar factura"><Paperclip size={17}/><input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" onChange={e=>attachFile(i.id,e.target.files?.[0])}/></label><a className="icon whatsapp" title="Recordatorio WhatsApp" href="#" onClick={e=>{e.preventDefault();openWhatsAppReminder(i,c)}}><W/></a><a className="icon mail" title="Recordatorio correo manual" href="#" onClick={e=>{e.preventDefault();abrirCorreoRecordatorioFactura(i,c)}}><Mail size={17}/></a><button className="icon autoMailIcon" title="Recordatorio automático Outlook" onClick={()=>{requirePdfForCobranza(i);sendAutoReminder(i,c)}}>AUTO</button><button className={`icon autoInvoiceIcon ${!data.attachments?.[i.id]?"disabled":""}`} title="Enviar factura automática Outlook" onClick={()=>sendAutoInvoice(i,c)}>PDF</button><a className={`icon invoiceSend ${!data.attachments?.[i.id]?"disabled":""}`} title="Enviar factura WhatsApp" href="#" onClick={e=>{e.preventDefault();openWhatsAppInvoiceSafe(i,c)}}>FAC</a><button className="icon edit" onClick={()=>edit(i)}><Edit size={17}/></button><button className="icon trash" onClick={()=>del(i.id)}><Trash2 size={17}/></button>{data.attachments?.[i.id]?<span className={`attachedOk pdfSemaforo ${data.attachments[i.id].sent?"yellow":"green"}`}>{data.attachments[i.id].sent?"🟡 PDF enviado":"🟢 PDF cargado"}</span>:<span className="attachedOk pdfSemaforo red">🔴 Sin PDF</span>}</div></td></tr>})}</tbody></table></div>}
 
 class ErrorBoundary extends Component{
   constructor(props){
@@ -791,7 +791,7 @@ function hasInvoicePdf(inv){
 }
 function requirePdfForCobranza(inv){
   if(!hasInvoicePdf(inv)){
-    alert("Advertencia: esta factura no tiene PDF adjunto. Se continuará con el envío del recordatorio.");
+    alert("Advertencia: esta factura no tiene PDF adjunto. Se continuará con el envío.");
   }
   return true;
 }
@@ -960,24 +960,41 @@ async function installMobileApp(){
 }
 
 
-function openMailtoSafe(mailto){
+function abrirCorreoRecordatorioFactura(inv,c){
   try{
-    const w=window.open(mailto,"_self");
-    if(!w) window.location.href=mailto;
-  }catch(err){
-    window.location.href=mailto;
-  }
-}
-function openEmailReminderFixed(inv,c){
-  try{
-    requirePdfForCobranza(inv);
-    if(!c?.email){
-      alert("El cliente no tiene correo registrado.");
+    if(!inv){
+      alert("No se encontró la factura seleccionada.");
       return;
     }
-    openMailtoSafe(emailReminder(inv,c));
+    if(!c){
+      alert("No se encontró el cliente asociado a la factura.");
+      return;
+    }
+    const correo=String(c.email||c.correo||"").trim();
+    if(!correo){
+      alert("El cliente no tiene correo registrado. Agregue un email en la ficha del cliente.");
+      return;
+    }
+    if(!hasInvoicePdf(inv)){
+      alert("Advertencia: esta factura no tiene PDF adjunto. Se abrirá el correo igualmente.");
+    }
+    const asunto=`Recordatorio de pago Factura ${inv.factura||inv.numero||""} - GPSRUTA`;
+    const cuerpo=[
+      `Estimado cliente,`,
+      ``,
+      `Se recuerda su Factura ${inv.factura||inv.numero||""} por la suma de ${money(+inv.monto||0)}.`,
+      ``,
+      `Saludos cordiales.`,
+      `GPSRUTA`,
+      ``,
+      `${ADMIN_NAME_GPSRUTA}`,
+      `${ADMIN_EMAIL_GPSRUTA}`
+    ].join("\\n");
+    const mailto=`mailto:${encodeURIComponent(correo)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    window.location.assign(mailto);
   }catch(err){
-    alert("No se pudo abrir el correo: "+(err?.message||err));
+    console.error("Error correo recordatorio:",err);
+    alert("No se pudo abrir el correo de recordatorio: "+(err?.message||err));
   }
 }
 
@@ -1186,7 +1203,7 @@ return <div className="app"><aside><Logo/><div className="admin"><User size={24}
   </select>
   <div className="reminderCount"><b>{alertInvoices.length}</b><span>alertas</span></div>
 </div>
-<div className="reminderList compactList">{alertInvoices.map(inv=>{let c=client(inv.clienteId),s=ist(inv),Icon=s.I;return <button key={inv.id} className={`reminder compactReminder ${selectedInvoice?.id===inv.id?"selected":""}`} onClick={()=>setSelectedInvoiceId(inv.id)}><Icon className={s.c} size={20}/><div><b>{inv.factura}</b><p>{c?.nombre}</p></div><strong>{money(inv.monto)}</strong><small>{inv.vencimiento}</small></button>})}</div></div><div className="card attach stickyCobroAction"><h2><Paperclip size={20}/>Adjuntar factura</h2>{selectedInvoice?<><div className="selected"><b>{selectedInvoice.factura}</b><p>{selectedClient?.nombre} · {money(selectedInvoice.monto)}</p><small className="requiredAttach">Para usar Enviar factura, primero debe adjuntar la factura. El recordatorio no requiere adjunto.</small></div><label className="drop"><UploadCloud size={32}/><b>Buscar factura en mi PC</b><small>PDF, JPG, PNG, DOCX, XLSX</small><input type="file" onChange={e=>attachFile(selectedInvoice.id,e.target.files?.[0])}/></label>{data.attachments?.[selectedInvoice.id]&&<div className="fileBox"><FileText size={22}/><div><b>{data.attachments[selectedInvoice.id].name}</b><p>{(data.attachments[selectedInvoice.id].size/1024/1024).toFixed(2)} MB</p></div></div>}<div className="actions big"><div className="sendGroup"><b>Recordatorio</b><a className="send whatsapp" href="#" onClick={e=>{e.preventDefault();openWhatsAppReminder(selectedInvoice,selectedClient)}}><W/>WhatsApp</a><a className="send mail" href="#" onClick={e=>{e.preventDefault();openEmailReminderFixed(selectedInvoice,selectedClient)}}><Mail size={18}/>Correo manual</a><button className="send autoMail" onClick={()=>{requirePdfForCobranza(selectedInvoice);sendAutoReminder(selectedInvoice,selectedClient)}}>Enviar automático</button></div><div className="sendGroup"><b>Enviar factura</b><a className={`send whatsapp ${!data.attachments?.[selectedInvoice.id]?"disabled":""}`} href="#" onClick={(e)=>{e.preventDefault();openWhatsAppInvoiceSafe(selectedInvoice,selectedClient)}}><W/>WhatsApp</a><a className={`send mail ${!data.attachments?.[selectedInvoice.id]?"disabled":""}`} href="#" onClick={(e)=>{e.preventDefault();openEmailInvoiceSafe(selectedInvoice,selectedClient)}}><Mail size={18}/>Correo manual</a><button className={`send autoMail ${!data.attachments?.[selectedInvoice.id]?"disabled":""}`} onClick={()=>sendAutoInvoice(selectedInvoice,selectedClient)}>Enviar automático</button></div></div></>:<p>No hay facturas por cobrar.</p>}</div></section>}
+<div className="reminderList compactList">{alertInvoices.map(inv=>{let c=client(inv.clienteId),s=ist(inv),Icon=s.I;return <button key={inv.id} className={`reminder compactReminder ${selectedInvoice?.id===inv.id?"selected":""}`} onClick={()=>setSelectedInvoiceId(inv.id)}><Icon className={s.c} size={20}/><div><b>{inv.factura}</b><p>{c?.nombre}</p></div><strong>{money(inv.monto)}</strong><small>{inv.vencimiento}</small></button>})}</div></div><div className="card attach stickyCobroAction"><h2><Paperclip size={20}/>Adjuntar factura</h2>{selectedInvoice?<><div className="selected"><b>{selectedInvoice.factura}</b><p>{selectedClient?.nombre} · {money(selectedInvoice.monto)}</p><small className="requiredAttach">Para usar Enviar factura, primero debe adjuntar la factura. El recordatorio no requiere adjunto.</small></div><label className="drop"><UploadCloud size={32}/><b>Buscar factura en mi PC</b><small>PDF, JPG, PNG, DOCX, XLSX</small><input type="file" onChange={e=>attachFile(selectedInvoice.id,e.target.files?.[0])}/></label>{data.attachments?.[selectedInvoice.id]&&<div className="fileBox"><FileText size={22}/><div><b>{data.attachments[selectedInvoice.id].name}</b><p>{(data.attachments[selectedInvoice.id].size/1024/1024).toFixed(2)} MB</p></div></div>}<div className="actions big"><div className="sendGroup"><b>Recordatorio</b><a className="send whatsapp" href="#" onClick={e=>{e.preventDefault();openWhatsAppReminder(selectedInvoice,selectedClient)}}><W/>WhatsApp</a><a className="send mail" href="#" onClick={e=>{e.preventDefault();abrirCorreoRecordatorioFactura(selectedInvoice,selectedClient)}}><Mail size={18}/>Correo manual</a><button className="send autoMail" onClick={()=>{requirePdfForCobranza(selectedInvoice);sendAutoReminder(selectedInvoice,selectedClient)}}>Enviar automático</button></div><div className="sendGroup"><b>Enviar factura</b><a className={`send whatsapp ${!data.attachments?.[selectedInvoice.id]?"disabled":""}`} href="#" onClick={(e)=>{e.preventDefault();openWhatsAppInvoiceSafe(selectedInvoice,selectedClient)}}><W/>WhatsApp</a><a className={`send mail ${!data.attachments?.[selectedInvoice.id]?"disabled":""}`} href="#" onClick={(e)=>{e.preventDefault();openEmailInvoiceSafe(selectedInvoice,selectedClient)}}><Mail size={18}/>Correo manual</a><button className={`send autoMail ${!data.attachments?.[selectedInvoice.id]?"disabled":""}`} onClick={()=>sendAutoInvoice(selectedInvoice,selectedClient)}>Enviar automático</button></div></div></>:<p>No hay facturas por cobrar.</p>}</div></section>}
 </main></div>}
 function HistoryFilters({historyQuickFilter,setHistoryQuickFilter,historyMonthFilter,setHistoryMonthFilter,historyStatusFilter,setHistoryStatusFilter,historyMonths,showStatus=false}){
  return <div className="historyFilters"><input value={historyQuickFilter} onChange={e=>setHistoryQuickFilter(e.target.value)} placeholder="Buscar en historial..."/><select value={historyMonthFilter} onChange={e=>setHistoryMonthFilter(e.target.value)}>{historyMonths.map(m=><option key={m} value={m}>{m==="Todos"?"Todos los meses":ml(m)}</option>)}</select>{showStatus&&<select value={historyStatusFilter} onChange={e=>setHistoryStatusFilter(e.target.value)}><option>Todos</option><option>Pendiente</option><option>Pagada</option><option>Vencida</option></select>}<button onClick={()=>{setHistoryQuickFilter("");setHistoryMonthFilter("Todos");setHistoryStatusFilter("Todos")}}>Limpiar</button></div>}
