@@ -2397,3 +2397,44 @@ button.icon.mail:hover{
   pointer-events:auto!important;
   cursor:pointer!important;
 }
+
+
+/* BOTONES SEGUROS DE RECORDATORIO */
+.recordatorioSafeButtons{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:5px;
+  margin:4px 0;
+  min-width:82px;
+  position:relative;
+  z-index:5;
+}
+.recordatorioSafeButtons button{
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:9px;
+  padding:6px 8px;
+  font-size:10px;
+  font-weight:900;
+  cursor:pointer!important;
+  pointer-events:auto!important;
+  line-height:1;
+}
+.recordatorioSafeButtons .safeWsp{
+  background:rgba(124,252,0,.13);
+  color:#7CFC00;
+  border-color:rgba(124,252,0,.42);
+}
+.recordatorioSafeButtons .safeMail{
+  background:rgba(0,200,255,.13);
+  color:#00c8ff;
+  border-color:rgba(0,200,255,.42);
+}
+.recordatorioSafeButtons .safeCopy{
+  background:rgba(255,212,59,.13);
+  color:#FFD43B;
+  border-color:rgba(255,212,59,.42);
+}
+.recordatorioSafeButtons button:hover{
+  transform:translateY(-1px);
+  box-shadow:0 0 14px rgba(0,255,210,.14);
+}
