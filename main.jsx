@@ -289,23 +289,30 @@ const cloudStats=useMemo(()=>{
 function aiMessage(i){return `Estimado cliente, se recuerda su Factura ${i.factura} por la suma de ${money(i.monto)}. Saludos Cordiales GpsRuta`}
 
 async function saveClient(){
-if(!clientForm.nombre||!clientForm.rut){alert("Complete nombre/razón social y RUT del cliente.");return;}
-const cleanRut=(rut)=>String(rut||"").replace(/\./g,"").replace(/-/g,"").replace(/\s/g,"").toLowerCase();
-const duplicatedRut=data.clients.some(c=>cleanRut(c.rut)===cleanRut(clientForm.rut)&&c.id!==editingClient);
-if(duplicatedRut){alert("ERROR: Ya existe un cliente registrado con este RUT. No se puede repetir.");return;}
-try{
- if(!supabase) throw new Error("Supabase no configurado");
- if(editingClient){
-  const {data:row,error}=await supabase.from("clientes").update(toClientDB(clientForm)).eq("id",editingClient).select().single();
-  if(error)throw error;
-  setData({...data,clients:data.clients.map(c=>c.id===editingClient?fromClientDB(row):c)});setEditingClient(null);
- }else{
-  const {data:row,error}=await supabase.from("clientes").insert(toClientDB(clientForm)).select().single();
-  if(error)throw error;
-  setData({...data,clients:[fromClientDB(row),...data.clients]});
- }
- setClientForm({nombre:"",rut:"",giro:"",telefono:"569",email:"",direccion:"",contacto:""});
-}catch(err){alert("Error al guardar cliente en Supabase: "+err.message)}
+  try{
+    if(!clientForm.nombre||!clientForm.rut){
+      alert("Debe ingresar nombre y RUT del cliente.");
+      return;
+    }
+    const rutNuevo=String(clientForm.rut||"").trim().toLowerCase();
+    const repetido=(data.clients||[]).find(c=>String(c.rut||"").trim().toLowerCase()===rutNuevo && String(c.id)!==String(editingClient||clientForm.id||""));
+    if(repetido){
+      alert("Error: ya existe un cliente con este RUT.");
+      return;
+    }
+    const clienteGuardado=await guardarClienteSupabase({...clientForm,id:editingClient||clientForm.id});
+    setData(prev=>{
+      const existe=(prev.clients||[]).some(c=>String(c.id)===String(clienteGuardado.id));
+      return {...prev,clients:existe?prev.clients.map(c=>String(c.id)===String(clienteGuardado.id)?clienteGuardado:c):[clienteGuardado,...(prev.clients||[])]};
+    });
+    setClientForm({});
+    setEditingClient(null);
+    if(typeof confirmCloudSaved==="function") confirmCloudSaved("Cliente");
+    alert("Cliente guardado correctamente en Supabase.");
+  }catch(err){
+    console.error("Error al guardar cliente:",err);
+    alert("Error al guardar cliente en Supabase: "+(err?.message||err));
+  }
 }
 function editClient(c){setEditingClient(c.id);setClientForm(c);setTab("clientes")}
 async function deleteClient(id){
@@ -313,18 +320,30 @@ async function deleteClient(id){
  try{await supabase.from("facturas").delete().eq("cliente_id",id);await supabase.from("clientes").delete().eq("id",id);setData({...data,clients:data.clients.filter(c=>c.id!==id),invoices:data.invoices.filter(i=>+i.clienteId!==+id)})}catch(err){alert("Error al eliminar cliente: "+err.message)}
 }
 async function saveInvoice(){
-if(!invoiceForm.clienteId||!invoiceForm.factura||!invoiceForm.monto){alert("Complete cliente, número de factura y monto.");return;}
-const duplicated=data.invoices.some(i=>String(i.factura).trim().toLowerCase()===String(invoiceForm.factura).trim().toLowerCase()&&i.id!==editingInvoice);
-if(duplicated&&!confirm("Esta factura ya existe. ¿Desea guardarla igualmente?"))return;
-try{
- let saved;
- if(editingInvoice){const {data:row,error}=await supabase.from("facturas").update(toInvoiceDB(invoiceForm)).eq("id",editingInvoice).select().single();if(error)throw error;saved=fromInvoiceDB(row)}
- else{const {data:row,error}=await supabase.from("facturas").insert(toInvoiceDB(invoiceForm)).select().single();if(error)throw error;saved=fromInvoiceDB(row)}
- let nextAttachments={...(data.attachments||{})};
- if(saved.estado==="Pagada"){await deleteAttachment(saved.id,nextAttachments[saved.id]);delete nextAttachments[saved.id];}
- setData({...data,attachments:nextAttachments,invoices:editingInvoice?data.invoices.map(i=>i.id===editingInvoice?saved:i):[saved,...data.invoices]});
- setEditingInvoice(null);setInvoiceFolderMonth(mk(saved.vencimiento||saved.emision));setInvoiceForm({clienteId:"",factura:"",emision:today(),vencimiento:today(),monto:"",estado:"Pendiente",detalle:""});
-}catch(err){alert("Error al guardar factura en Supabase: "+err.message)}
+  try{
+    if(typeof setInvoiceFeedback==="function") setInvoiceFeedback("");
+    if(typeof setInvoiceSaving==="function") setInvoiceSaving(true);
+    if(!invoiceForm.clienteId||!invoiceForm.factura||!invoiceForm.monto){
+      alert("Debe completar cliente, número de factura y monto.");
+      return;
+    }
+    const facturaGuardada=await guardarFacturaSupabase({...invoiceForm,id:editingInvoice||invoiceForm.id});
+    setData(prev=>{
+      const existe=(prev.invoices||[]).some(i=>String(i.id)===String(facturaGuardada.id));
+      return {...prev,invoices:existe?prev.invoices.map(i=>String(i.id)===String(facturaGuardada.id)?facturaGuardada:i):[facturaGuardada,...(prev.invoices||[])]};
+    });
+    setInvoiceForm({estado:"Pendiente"});
+    setEditingInvoice(null);
+    if(typeof setInvoiceFeedback==="function") setInvoiceFeedback("✅ Factura cargada correctamente en Supabase.");
+    if(typeof confirmCloudSaved==="function") confirmCloudSaved("Factura");
+    alert("Factura guardada correctamente en Supabase.");
+  }catch(err){
+    console.error("Error al guardar factura:",err);
+    if(typeof setInvoiceFeedback==="function") setInvoiceFeedback("❌ Error al guardar factura: "+(err?.message||err));
+    alert("Error al guardar factura en Supabase: "+(err?.message||err));
+  }finally{
+    if(typeof setInvoiceSaving==="function") setInvoiceSaving(false);
+  }
 }
 function editInvoice(i){setEditingInvoice(i.id);setInvoiceForm({...i,clienteId:String(i.clienteId)});setTab("facturas")}
 async function deleteInvoice(id){
@@ -1090,6 +1109,99 @@ async function copiarRecordatorioSeguro(inv){
   }
 }
 
+
+function mapClienteFromSupabase(r){
+  return {
+    id:r.id,
+    nombre:r.nombre||"",
+    rut:r.rut||"",
+    giro:r.giro||"",
+    telefono:r.telefono||"",
+    email:r.email||"",
+    direccion:r.direccion||"",
+    contacto:r.contacto||""
+  };
+}
+function mapFacturaFromSupabase(r){
+  return {
+    id:r.id,
+    clienteId:r.cliente_id||r.clienteId,
+    factura:r.numero||r.factura||"",
+    emision:r.fecha_emision||r.emision||"",
+    vencimiento:r.fecha_vencimiento||r.vencimiento||"",
+    monto:Number(r.monto||0),
+    estado:r.estado||"Pendiente",
+    detalle:r.detalle||""
+  };
+}
+async function cargarClientesFacturasSupabase(){
+  try{
+    if(!supabase) return;
+    const [{data:clientes,error:errClientes},{data:facturas,error:errFacturas}]=await Promise.all([
+      supabase.from("clientes").select("*").order("id",{ascending:false}),
+      supabase.from("facturas").select("*").order("id",{ascending:false})
+    ]);
+    if(errClientes) throw errClientes;
+    if(errFacturas) throw errFacturas;
+    setData(prev=>({
+      ...prev,
+      clients:(clientes||[]).map(mapClienteFromSupabase),
+      invoices:(facturas||[]).map(mapFacturaFromSupabase)
+    }));
+    if(typeof confirmCloudSaved==="function") confirmCloudSaved("Clientes y facturas cargadas");
+  }catch(err){
+    console.error("Error cargando clientes/facturas desde Supabase:",err);
+    alert("Error al cargar clientes/facturas desde Supabase: "+(err?.message||err));
+  }
+}
+async function guardarClienteSupabase(cliente){
+  if(!supabase) throw new Error("Supabase no está conectado");
+  const payload={
+    nombre:cliente.nombre||"",
+    rut:cliente.rut||"",
+    giro:cliente.giro||"",
+    telefono:cliente.telefono||"",
+    email:cliente.email||"",
+    direccion:cliente.direccion||"",
+    contacto:cliente.contacto||""
+  };
+  let res;
+  if(cliente.id){
+    res=await supabase.from("clientes").update(payload).eq("id",cliente.id).select().single();
+  }else{
+    res=await supabase.from("clientes").insert(payload).select().single();
+  }
+  if(res.error) throw res.error;
+  return mapClienteFromSupabase(res.data);
+}
+async function guardarFacturaSupabase(factura){
+  if(!supabase) throw new Error("Supabase no está conectado");
+  const payload={
+    cliente_id:Number(factura.clienteId),
+    numero:String(factura.factura||factura.numero||""),
+    fecha_emision:factura.emision||"",
+    fecha_vencimiento:factura.vencimiento||"",
+    monto:Number(factura.monto||0),
+    estado:factura.estado||"Pendiente",
+    detalle:factura.detalle||""
+  };
+  let res;
+  if(factura.id){
+    res=await supabase.from("facturas").update(payload).eq("id",factura.id).select().single();
+  }else{
+    res=await supabase.from("facturas").insert(payload).select().single();
+  }
+  if(res.error) throw res.error;
+  return mapFacturaFromSupabase(res.data);
+}
+
+
+useEffect(()=>{
+  if(supabase){
+    cargarClientesFacturasSupabase();
+  }
+},[]);
+
 if(!logged)return <Login onLogin={()=>setLogged(true)}/>;
 return <div className="app"><aside><Logo/><div className="admin"><User size={24}/><div><b>Bernardo Hernández</b><p>gpsruta007@outlook.com</p></div></div><nav>{[["dashboard","Dashboard",Eye],["clientes","Clientes",Users],["facturas","Facturas por cobrar",FileText],["deudas","Deudas / Facturas por pagar",CreditCard],["ingresos","Ingresos",TrendingUp],["egresos","Egresos",TrendingDown],["alertas","Cobros / Recordatorios",Bell]].map(([v,l,I])=><button key={v} onClick={()=>setTab(v)} className={tab===v?"active":""}><I size={20}/>{l}</button>)}</nav><div className="autosave"><CheckCircle size={20}/><div><b>Guardado automático activo</b><p>Último guardado: {saved}</p></div></div><button className="logout" onClick={()=>{sessionStorage.removeItem(SESSION);setLogged(false)}}><LogOut size={19}/>Cerrar sesión</button></aside><main><header><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, factura o giro..."/></div><div className="chips"><select value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)} className="monthSelect">{months.map(m=><option key={m} value={m}>{ml(m)}</option>)}</select><span><CalendarDays size={17}/>{clock.toLocaleDateString("es-CL")}</span><span><Clock size={17}/>{clock.toLocaleTimeString("es-CL",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span><span className="green"><Save size={17}/>Guardado automático</span></div></header>
 <section className="backupToolbar">
@@ -1245,6 +1357,11 @@ return <div className="app"><aside><Logo/><div className="admin"><User size={24}
     <button onClick={installMobileApp}>{isStandalone?"App instalada":"📲 Instalar en celular"}</button>
   </div>
 </section>}
+
+{tab==="dashboard"&&<div className="card supabaseDataGuarantee">
+  <h2>Base de datos Supabase</h2>
+  <p>Clientes y facturas se guardan directamente en Supabase. Al cerrar y volver a abrir el sistema, la información se carga desde la nube.</p>
+</div>}
 {tab==="clientes"&&<section className="two"><div className="card clientFormSticky"><h2>{editingClient?"Editar cliente":"Nuevo cliente"}</h2>
 <div className="excelImportBox">
   <label className="excelBtn">📥 Cargar clientes desde Excel
