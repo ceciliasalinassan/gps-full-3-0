@@ -2357,3 +2357,43 @@ button.mail,
   opacity:1!important;
   filter:none!important;
 }
+
+
+/* FIX ICONOS WHATSAPP Y CORREO FACTURAS */
+button.icon.whatsapp,
+button.icon.mail{
+  appearance:none;
+  -webkit-appearance:none;
+  display:inline-grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  border-radius:9px;
+  background:rgba(0,255,210,.08);
+  border:1px solid rgba(0,255,210,.25);
+  cursor:pointer!important;
+  pointer-events:auto!important;
+  opacity:1!important;
+  filter:none!important;
+  padding:0;
+}
+button.icon.whatsapp{
+  color:#7CFC00;
+  border-color:rgba(124,252,0,.45);
+}
+button.icon.mail{
+  color:#00c8ff;
+  border-color:rgba(0,200,255,.45);
+}
+button.icon.whatsapp:hover,
+button.icon.mail:hover{
+  transform:translateY(-1px);
+  box-shadow:0 0 16px rgba(0,255,210,.18);
+}
+.icon.whatsapp,
+.icon.mail,
+.send.whatsapp,
+.send.mail{
+  pointer-events:auto!important;
+  cursor:pointer!important;
+}
