@@ -1396,7 +1396,7 @@ async function importarRespaldoCompletoSupabase(file){
       const text=await file.text();
       const backup=JSON.parse(text);
       const r=await importarJsonGpsrutaSupabase(backup);
-      alert(`Respaldo JSON importado a Supabase.\nClientes: ${r.clientes} de ${r.rawClientes}\nFacturas: ${r.facturas} de ${r.rawFacturas}\nIngresos: ${r.ingresos}\nEgresos: ${r.egresos}\nDeudas: ${r.deudas}\nTareas: ${r.tareas}\nAdjuntos metadata: ${r.adjuntos}\n\nNota: los PDF físicos deben subirse nuevamente si no están en Storage.`);
+      alert(`Respaldo JSON importado a Supabase. Los RUT duplicados se actualizan u omiten automáticamente.\nClientes: ${r.clientes} de ${r.rawClientes}\nFacturas: ${r.facturas} de ${r.rawFacturas}\nIngresos: ${r.ingresos}\nEgresos: ${r.egresos}\nDeudas: ${r.deudas}\nTareas: ${r.tareas}\nAdjuntos metadata: ${r.adjuntos}\n\nNota: los PDF físicos deben subirse nuevamente si no están en Storage.`);
       return;
     }
 
@@ -1489,26 +1489,57 @@ async function gpsrutaFindFacturaByNumero(numero){
   return data;
 }
 async function gpsrutaSaveClienteManual(payload){
-  const existente=await gpsrutaFindClienteByRut(payload.rut);
+  // Evita error por RUT vacío o repetido
+  payload.rut = String(payload.rut || "").trim();
+  if(!payload.rut){
+    payload.rut = "SIN-RUT-" + String(payload.nombre || Date.now()).replace(/\s+/g,"-").slice(0,40);
+  }
+
+  const existente = await gpsrutaFindClienteByRut(payload.rut);
   if(existente?.id){
     const {data,error}=await supabase.from("clientes").update(payload).eq("id",existente.id).select("*").single();
     if(error) throw error;
     return data;
   }
-  const {data,error}=await supabase.from("clientes").insert(payload).select("*").single();
-  if(error) throw error;
-  return data;
+
+  const insertRes = await supabase.from("clientes").insert(payload).select("*").single();
+
+  if(insertRes.error){
+    // Si Supabase dice que el RUT ya existe, buscarlo y actualizarlo en vez de detener la importación.
+    if(String(insertRes.error.message||"").includes("duplicate key") || insertRes.error.code==="23505"){
+      const nuevamente = await gpsrutaFindClienteByRut(payload.rut);
+      if(nuevamente?.id){
+        const {data,error}=await supabase.from("clientes").update(payload).eq("id",nuevamente.id).select("*").single();
+        if(error) throw error;
+        return data;
+      }
+    }
+    throw insertRes.error;
+  }
+
+  return insertRes.data;
 }
 async function gpsrutaSaveFacturaManual(payload){
+  payload.numero=String(payload.numero||"").trim();
   const existente=await gpsrutaFindFacturaByNumero(payload.numero);
   if(existente?.id){
     const {data,error}=await supabase.from("facturas").update(payload).eq("id",existente.id).select("*").single();
     if(error) throw error;
     return data;
   }
-  const {data,error}=await supabase.from("facturas").insert(payload).select("*").single();
-  if(error) throw error;
-  return data;
+  const insertRes=await supabase.from("facturas").insert(payload).select("*").single();
+  if(insertRes.error){
+    if(String(insertRes.error.message||"").includes("duplicate key") || insertRes.error.code==="23505"){
+      const nuevamente=await gpsrutaFindFacturaByNumero(payload.numero);
+      if(nuevamente?.id){
+        const {data,error}=await supabase.from("facturas").update(payload).eq("id",nuevamente.id).select("*").single();
+        if(error) throw error;
+        return data;
+      }
+    }
+    throw insertRes.error;
+  }
+  return insertRes.data;
 }
 async function gpsrutaInsertManySafe(table,payload){
   const guardados=[];
@@ -1533,6 +1564,7 @@ async function importarJsonGpsrutaSupabase(backup){
 
   const clientesGuardados=[];
   const clienteIdMap=new Map();
+  const rutYaProcesadosGpsruta=new Set();
 
   for(const c of clientesRaw){
     const payload={
@@ -1545,6 +1577,15 @@ async function importarJsonGpsrutaSupabase(backup){
       contacto:String(c.contacto||c.contact||"").trim()
     };
     if(!payload.nombre && !payload.rut) continue;
+    if(!payload.rut){
+      payload.rut = "SIN-RUT-" + String(c.id || payload.nombre || Date.now()).replace(/\s+/g,"-").slice(0,40);
+    }
+    const rutKey = String(payload.rut).trim().toLowerCase();
+    if(rutYaProcesadosGpsruta.has(rutKey)){
+      console.warn("Cliente duplicado en respaldo omitido:", payload.rut, payload.nombre);
+      continue;
+    }
+    rutYaProcesadosGpsruta.add(rutKey);
     try{
       const guardado=await gpsrutaSaveClienteManual(payload);
       if(guardado){
