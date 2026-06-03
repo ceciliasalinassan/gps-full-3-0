@@ -77,7 +77,7 @@ function Logo(){return <div className="logo"><div className="pin">⌖</div><div>
 function Login({onLogin}){const[p,setP]=useState(""),[e,setE]=useState("");return <div className="loginPage"><form className="loginCard" onSubmit={x=>{x.preventDefault();if(p===PASS){sessionStorage.setItem(SESSION,"1");onLogin()}else setE("Clave incorrecta. Clave demo: 1234")}}><Logo/><h2>Ingreso Seguro</h2><p>Sistema financiero y cobranza</p><div className="loginInput"><Lock size={18}/><input type="password" value={p} onChange={x=>setP(x.target.value)} placeholder="Clave de acceso"/></div>{e&&<div className="error">{e}</div>}<button className="primary full"><ShieldCheck size={18}/>Ingresar</button></form></div>}
 function K({t,v,s,icon:Icon,tone="green"}){return <div className="card kpi"><div className={`kpiIcon ${tone}`}><Icon size={32}/></div><div><small>{t}</small><h3>{v}</h3><p>{s}</p></div></div>}
 function Fields({obj,set,fields}){return <div className="formGrid">{fields.map(f=><input key={f} value={obj[f]||""} onChange={e=>set({...obj,[f]:e.target.value})} placeholder={f.toUpperCase()} type={["fecha","emision","vencimiento"].includes(f)?"date":f==="monto"?"number":"text"}/>)}</div>}
-function InvTable({items,client,edit,del,data={},attachFile=()=>{},canSendInvoice=()=>true}){return <div className="tableWrap"><table><thead><tr><th>Factura</th><th>Cliente</th><th>Vence</th><th>Mes/Año</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{items.map(i=>{let c=client(i.clienteId),s=ist(i),Icon=s.I;return <tr key={i.id}><td><b>{i.factura}</b></td><td>{c?.nombre}</td><td>{i.vencimiento}</td><td>{ml(mk(i.vencimiento))}</td><td>{money(i.monto)}</td><td><span className={`status ${s.c}`}><Icon size={14}/>{s.l}</span></td><td><div className="actions"><label className="icon attachMini" title="Adjuntar factura"><Paperclip size={17}/><input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" onChange={e=>attachFile(i.id,e.target.files?.[0])}/></label><a className="icon whatsapp" title="Recordatorio WhatsApp" onClick={()=>abrirWhatsAppSeguro(i,c)} type="button"><W/></a><a className="icon mail" title="Recordatorio correo manual" onClick={()=>abrirCorreoSeguro(i,c)} type="button"><Mail size={17}/></a><button className="icon autoMailIcon" title="Recordatorio automático Outlook" onClick={()=>{requirePdfForCobranza(i);sendAutoReminder(i,c)}}>AUTO</button><button className={`icon autoInvoiceIcon ${!data.attachments?.[i.id]?"disabled":""}`} title="Enviar factura automática Outlook" onClick={()=>sendAutoInvoice(i,c)}>PDF</button><a className={`icon invoiceSend ${!data.attachments?.[i.id]?"disabled":""}`} title="Enviar factura WhatsApp" href="#" onClick={e=>{e.preventDefault();openWhatsAppInvoiceSafe(i,c)}}>FAC</a><button className="icon edit" onClick={()=>edit(i)}><Edit size={17}/></button><button className="icon trash" onClick={()=>del(i.id)}><Trash2 size={17}/></button><div className="recordatorioSafeButtons"><button type="button" className="safeWsp" onClick={()=>abrirWhatsAppSeguro(i,c)}>WhatsApp</button><button type="button" className="safeMail" onClick={()=>abrirCorreoSeguro(i,c)}>Correo</button><button type="button" className="safeCopy" onClick={()=>copiarRecordatorioSeguro(i)}>Copiar</button></div>{data.attachments?.[i.id]?<span className={`attachedOk pdfSemaforo ${data.attachments[i.id].sent?"yellow":"green"}`}>{data.attachments[i.id].sent?"🟡 PDF enviado":"🟢 PDF cargado"}</span>:<span className="attachedOk pdfSemaforo red">🔴 Sin PDF</span>}</div></td></tr>})}</tbody></table></div>}
+function InvTable({items,client,edit,del,data={},attachFile=()=>{},canSendInvoice=()=>true}){return <div className="tableWrap"><table><thead><tr><th>Factura</th><th>Cliente</th><th>Vence</th><th>Mes/Año</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{items.map(i=>{let c=client(i.clienteId),s=ist(i),Icon=s.I;return <tr key={i.id}><td><b>{i.factura}</b></td><td>{c?.nombre}</td><td>{i.vencimiento}</td><td>{ml(mk(i.vencimiento))}</td><td>{money(i.monto)}</td><td><span className={`status ${s.c}`}><Icon size={14}/>{s.l}</span></td><td><div className="actions"><label className="icon attachMini" title="Adjuntar factura"><Paperclip size={17}/><input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" onChange={e=>attachFile(i.id,e.target.files?.[0])}/></label><a className="icon whatsapp" title="Recordatorio WhatsApp" onClick={()=>window.abrirWhatsAppSeguro(i,c)} type="button"><W/></a><a className="icon mail" title="Recordatorio correo manual" onClick={()=>window.abrirCorreoSeguro(i,c)} type="button"><Mail size={17}/></a><button className="icon autoMailIcon" title="Recordatorio automático Outlook" onClick={()=>{requirePdfForCobranza(i);sendAutoReminder(i,c)}}>AUTO</button><button className={`icon autoInvoiceIcon ${!data.attachments?.[i.id]?"disabled":""}`} title="Enviar factura automática Outlook" onClick={()=>sendAutoInvoice(i,c)}>PDF</button><a className={`icon invoiceSend ${!data.attachments?.[i.id]?"disabled":""}`} title="Enviar factura WhatsApp" href="#" onClick={e=>{e.preventDefault();openWhatsAppInvoiceSafe(i,c)}}>FAC</a><button className="icon edit" onClick={()=>edit(i)}><Edit size={17}/></button><button className="icon trash" onClick={()=>del(i.id)}><Trash2 size={17}/></button><div className="recordatorioSafeButtons"><button type="button" className="safeWsp" onClick={()=>window.abrirWhatsAppSeguro(i,c)}>WhatsApp</button><button type="button" className="safeMail" onClick={()=>window.abrirCorreoSeguro(i,c)}>Correo</button><button type="button" className="safeCopy" onClick={()=>window.copiarRecordatorioSeguro(i)}>Copiar</button></div>{data.attachments?.[i.id]?<span className={`attachedOk pdfSemaforo ${data.attachments[i.id].sent?"yellow":"green"}`}>{data.attachments[i.id].sent?"🟡 PDF enviado":"🟢 PDF cargado"}</span>:<span className="attachedOk pdfSemaforo red">🔴 Sin PDF</span>}</div></td></tr>})}</tbody></table></div>}
 
 class ErrorBoundary extends Component{
   constructor(props){
@@ -146,7 +146,50 @@ function moneyToNumber(v){
 const ADMIN_NAME_GPSRUTA="Bernardo Hernández";
 const ADMIN_EMAIL_GPSRUTA="gpsruta007@outlook.com";
 
-function App(){const[logged,setLogged]=useState(()=>sessionStorage.getItem(SESSION)==="1"),[data,setData]=useState(load),[tab,setTab]=useState("dashboard"),[clock,setClock]=useState(new Date()),[search,setSearch]=useState(""),[installPrompt,setInstallPrompt]=useState(null),[isStandalone,setIsStandalone]=useState(false),[cloudSaveStatus,setCloudSaveStatus]=useState("☁️ Guardado en la nube activo"),[lastCloudSync,setLastCloudSync]=useState("Sin sincronización reciente"),[pdfStatusFilter,setPdfStatusFilter]=useState("Todas"),[reportStatus,setReportStatus]=useState(""),[taskText,setTaskText]=useState(""),[historyQuickFilter,setHistoryQuickFilter]=useState(""),[historyMonthFilter,setHistoryMonthFilter]=useState("Todos"),[historyStatusFilter,setHistoryStatusFilter]=useState("Todos"),[alertSearch,setAlertSearch]=useState(""),[reminderStatusFilter,setReminderStatusFilter]=useState("Todas"),[saved,setSaved]=useState("Sin cambios"),[selectedInvoiceId,setSelectedInvoiceId]=useState(null),[selectedMonth,setSelectedMonth]=useState(mk(today())),[invoiceFolderMonth,setInvoiceFolderMonth]=useState("Todas"),[invoiceStatusFilter,setInvoiceStatusFilter]=useState("Vencida"),[invoicePage,setInvoicePage]=useState(1),[chatOpen,setChatOpen]=useState(true),[chatInput,setChatInput]=useState(""),[emailSending,setEmailSending]=useState(false),[chatMessages,setChatMessages]=useState([{role:"ia",text:"Hola, soy la LUXURY GPSRUTA. Pregúntame: ¿quién debe más?, ¿facturas vencidas?, ¿clientes premium?, ¿resumen del mes?, ¿ingresos?, ¿egresos?"}]);
+
+function gpsrutaMoneyGlobal(v){
+  try{return new Intl.NumberFormat("es-CL",{style:"currency",currency:"CLP",maximumFractionDigits:0}).format(Number(v||0));}
+  catch(e){return "$"+String(v||0);}
+}
+function gpsrutaMensajeRecordatorioGlobal(inv){
+  return `Estimado cliente, se recuerda su Factura ${inv?.factura||inv?.numero||""} por la suma de ${gpsrutaMoneyGlobal(inv?.monto||0)}.\n\nSaludos cordiales.\nGPSRUTA.`;
+}
+function abrirWhatsAppSeguro(inv,c){
+  try{
+    if(!inv){alert("No se encontró la factura.");return;}
+    if(!c){alert("No se encontró el cliente.");return;}
+    const raw=String(c.telefono||c.whatsapp||"").replace(/[^\d]/g,"");
+    if(!raw){alert("El cliente no tiene teléfono/WhatsApp registrado.");return;}
+    const tel=raw.startsWith("56")?raw:`56${raw}`;
+    const url=`https://api.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(gpsrutaMensajeRecordatorioGlobal(inv))}`;
+    window.open(url,"_blank","noopener,noreferrer");
+  }catch(err){alert("No se pudo abrir WhatsApp: "+(err?.message||err));}
+}
+function abrirWhatsAppAppSeguro(inv,c){return abrirWhatsAppSeguro(inv,c);}
+function abrirCorreoSeguro(inv,c){
+  try{
+    if(!inv){alert("No se encontró la factura.");return;}
+    if(!c){alert("No se encontró el cliente.");return;}
+    const correo=String(c.email||c.correo||"").trim();
+    if(!correo){alert("El cliente no tiene correo registrado.");return;}
+    const subject=`Recordatorio de pago Factura ${inv.factura||inv.numero||""} - GPSRUTA`;
+    const body=`${gpsrutaMensajeRecordatorioGlobal(inv)}\n\nBernardo Hernández\ngpsruta007@outlook.com`;
+    window.location.href=`mailto:${correo}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }catch(err){alert("No se pudo abrir correo: "+(err?.message||err));}
+}
+function abrirCorreoAppSeguro(inv,c){return abrirCorreoSeguro(inv,c);}
+async function copiarRecordatorioSeguro(inv){
+  const msg=gpsrutaMensajeRecordatorioGlobal(inv);
+  try{await navigator.clipboard.writeText(msg);alert("Mensaje copiado correctamente.");}
+  catch(err){alert("Mensaje:\n\n"+msg);}
+}
+window.abrirWhatsAppSeguro=abrirWhatsAppSeguro;
+window.abrirWhatsAppAppSeguro=abrirWhatsAppAppSeguro;
+window.abrirCorreoSeguro=abrirCorreoSeguro;
+window.abrirCorreoAppSeguro=abrirCorreoAppSeguro;
+window.copiarRecordatorioSeguro=copiarRecordatorioSeguro;
+
+function App(){const[logged,setLogged]=useState(()=>sessionStorage.getItem(SESSION)==="1"),[data,setData]=useState(load),[tab,setTab]=useState("dashboard"),[clock,setClock]=useState(new Date()),[search,setSearch]=useState(""),[realCloudStats,setRealCloudStats]=useState(null),[installPrompt,setInstallPrompt]=useState(null),[isStandalone,setIsStandalone]=useState(false),[cloudSaveStatus,setCloudSaveStatus]=useState("☁️ Guardado en la nube activo"),[lastCloudSync,setLastCloudSync]=useState("Sin sincronización reciente"),[pdfStatusFilter,setPdfStatusFilter]=useState("Todas"),[reportStatus,setReportStatus]=useState(""),[taskText,setTaskText]=useState(""),[historyQuickFilter,setHistoryQuickFilter]=useState(""),[historyMonthFilter,setHistoryMonthFilter]=useState("Todos"),[historyStatusFilter,setHistoryStatusFilter]=useState("Todos"),[alertSearch,setAlertSearch]=useState(""),[reminderStatusFilter,setReminderStatusFilter]=useState("Todas"),[saved,setSaved]=useState("Sin cambios"),[selectedInvoiceId,setSelectedInvoiceId]=useState(null),[selectedMonth,setSelectedMonth]=useState(mk(today())),[invoiceFolderMonth,setInvoiceFolderMonth]=useState("Todas"),[invoiceStatusFilter,setInvoiceStatusFilter]=useState("Vencida"),[invoicePage,setInvoicePage]=useState(1),[chatOpen,setChatOpen]=useState(true),[chatInput,setChatInput]=useState(""),[emailSending,setEmailSending]=useState(false),[chatMessages,setChatMessages]=useState([{role:"ia",text:"Hola, soy la LUXURY GPSRUTA. Pregúntame: ¿quién debe más?, ¿facturas vencidas?, ¿clientes premium?, ¿resumen del mes?, ¿ingresos?, ¿egresos?"}]);
 const[clientForm,setClientForm]=useState({nombre:"",rut:"",giro:"",telefono:"569",email:"",direccion:"",contacto:""}),[invoiceForm,setInvoiceForm]=useState({clienteId:"",factura:"",emision:today(),vencimiento:today(),monto:"",estado:"Pendiente",detalle:""}),[incomeForm,setIncomeForm]=useState({fecha:today(),categoria:"Pago de factura",descripcion:"",monto:"",facturaId:""}),[expenseForm,setExpenseForm]=useState({fecha:today(),categoria:"Pago instalador",descripcion:"",monto:"",debtId:"",numeroFacturaPago:""}),[debtForm,setDebtForm]=useState({fecha:today(),proveedor:"",emailProveedor:"",categoria:"Compra de equipos",descripcion:"",monto:"",vencimiento:today(),estado:"Pendiente"}),[editingClient,setEditingClient]=useState(null),[editingInvoice,setEditingInvoice]=useState(null);
 useEffect(()=>{setSaved("Nube lista")},[data]);
 useEffect(()=>{let t=setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(t)},[]);
@@ -1202,6 +1245,61 @@ useEffect(()=>{
   }
 },[]);
 
+
+function mapAdjuntoFromSupabase(r){
+  return {
+    facturaId:r.factura_id||r.facturaId,
+    name:r.name||"",
+    size:Number(r.size||0),
+    type:r.type||"",
+    path:r.path||"",
+    sent:r.sent||false,
+    sentAt:r.sent_at||r.sentAt||"",
+    attachedAt:r.created_at||r.attachedAt||""
+  };
+}
+async function cargarEstadoRealSupabase(){
+  try{
+    if(!supabase){
+      setRealCloudStats(null);
+      return;
+    }
+    const clientesReq = supabase.from("clientes").select("id",{count:"exact",head:true});
+    const facturasReq = supabase.from("facturas").select("id",{count:"exact",head:true});
+    const adjuntosReq = supabase.from("adjuntos").select("*");
+    const [clientesRes,facturasRes,adjuntosRes] = await Promise.all([clientesReq,facturasReq,adjuntosReq]);
+    if(clientesRes.error) throw clientesRes.error;
+    if(facturasRes.error) throw facturasRes.error;
+    if(adjuntosRes.error) throw adjuntosRes.error;
+    const adjuntosObj={};
+    let totalBytes=0;
+    (adjuntosRes.data||[]).forEach(r=>{
+      const a=mapAdjuntoFromSupabase(r);
+      if(a.facturaId) adjuntosObj[a.facturaId]=a;
+      totalBytes+=Number(a.size||0);
+    });
+    setData(prev=>({...prev,attachments:adjuntosObj}));
+    setRealCloudStats({
+      clientes:clientesRes.count||0,
+      facturas:facturasRes.count||0,
+      pdfs:(adjuntosRes.data||[]).length,
+      bytes:totalBytes,
+      updatedAt:new Date().toLocaleString("es-CL",{hour12:false})
+    });
+  }catch(err){
+    console.error("Error cargando estado real Supabase:",err);
+    setRealCloudStats(null);
+  }
+}
+const cloudViewStats={
+  facturas:realCloudStats?.facturas ?? (data.invoices||[]).length,
+  clientes:realCloudStats?.clientes ?? (data.clients||[]).length,
+  pdfs:realCloudStats?.pdfs ?? Object.keys(data.attachments||{}).length,
+  bytes:realCloudStats?.bytes ?? Object.values(data.attachments||{}).reduce((s,a)=>s+(+a.size||0),0),
+  updatedAt:realCloudStats?.updatedAt || new Date().toLocaleString("es-CL",{hour12:false})
+};
+
+useEffect(()=>{ if(supabase){ cargarEstadoRealSupabase(); } },[]);
 if(!logged)return <Login onLogin={()=>setLogged(true)}/>;
 return <div className="app"><aside><Logo/><div className="admin"><User size={24}/><div><b>Bernardo Hernández</b><p>gpsruta007@outlook.com</p></div></div><nav>{[["dashboard","Dashboard",Eye],["clientes","Clientes",Users],["facturas","Facturas por cobrar",FileText],["deudas","Deudas / Facturas por pagar",CreditCard],["ingresos","Ingresos",TrendingUp],["egresos","Egresos",TrendingDown],["alertas","Cobros / Recordatorios",Bell]].map(([v,l,I])=><button key={v} onClick={()=>setTab(v)} className={tab===v?"active":""}><I size={20}/>{l}</button>)}</nav><div className="autosave"><CheckCircle size={20}/><div><b>Guardado automático activo</b><p>Último guardado: {saved}</p></div></div><button className="logout" onClick={()=>{sessionStorage.removeItem(SESSION);setLogged(false)}}><LogOut size={19}/>Cerrar sesión</button></aside><main><header><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, factura o giro..."/></div><div className="chips"><select value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)} className="monthSelect">{months.map(m=><option key={m} value={m}>{ml(m)}</option>)}</select><span><CalendarDays size={17}/>{clock.toLocaleDateString("es-CL")}</span><span><Clock size={17}/>{clock.toLocaleTimeString("es-CL",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span><span className="green"><Save size={17}/>Guardado automático</span></div></header>
 <section className="backupToolbar">
@@ -1297,9 +1395,9 @@ return <div className="app"><aside><Logo/><div className="admin"><User size={24}
     <div className="holoBadge small">SUPABASE CLOUD</div>
     <h2>Estado nube GPSRUTA</h2>
     <div className="cloudGrid">
-      <div><b>{cloudStats.facturas}</b><span>Facturas</span></div>
-      <div><b>{cloudStats.clientes}</b><span>Clientes</span></div>
-      <div><b>{cloudStats.pdfs}</b><span>PDFs adjuntos</span></div><div className="cloudNoPdf"><b>{pdfStats.totalSinPdf}</b><span>Facturas sin PDF</span></div>
+      <div><b>{cloudViewStats.facturas}</b><span>Facturas</span></div>
+      <div><b>{cloudViewStats.clientes}</b><span>Clientes</span></div>
+      <div><b>{cloudViewStats.pdfs}</b><span>PDFs adjuntos</span></div><div className="cloudNoPdf"><b>{pdfStats.totalSinPdf}</b><span>Facturas sin PDF</span></div>
       <div><b>{cloudStats.mb.toFixed(1)} MB</b><span>Espacio estimado</span></div>
     </div>
     <div className="cloudStorage">
@@ -1361,6 +1459,12 @@ return <div className="app"><aside><Logo/><div className="admin"><User size={24}
 {tab==="dashboard"&&<div className="card supabaseDataGuarantee">
   <h2>Base de datos Supabase</h2>
   <p>Clientes y facturas se guardan directamente en Supabase. Al cerrar y volver a abrir el sistema, la información se carga desde la nube.</p>
+</div>}
+
+{tab==="dashboard"&&<div className="card supabaseDataGuarantee">
+  <h2>Conteo real Supabase</h2>
+  <p>Los contadores del Estado Nube ahora se calculan desde Supabase. Si la tabla adjuntos está vacía, el sistema mostrará 0 PDFs adjuntos.</p>
+  <button className="refreshCloudBtn" onClick={cargarEstadoRealSupabase}>Actualizar datos desde Supabase</button>
 </div>}
 {tab==="clientes"&&<section className="two"><div className="card clientFormSticky"><h2>{editingClient?"Editar cliente":"Nuevo cliente"}</h2>
 <div className="excelImportBox">
