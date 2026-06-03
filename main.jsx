@@ -1371,13 +1371,13 @@ async function upsertFacturasDesdeRespaldo(rows,clientesActualizados){
   });
   const valid=payload.filter(f=>f.numero&&f.cliente_id);
   if(!valid.length) return [];
-  const {data:inserted,error}=await supabase.from("facturas").upsert(valid,{onConflict:"numero"}).select("*");
+  const {data:inserted,error}=await supabase.from("facturas").insert(valid).select("*");
   if(error) throw error;
   return (inserted||[]).map(mapFacturaFromSupabase);
 }
 async function upsertSimpleTable(table,rows,mapFn,onConflict="id"){
   if(!rows.length) return [];
-  const {data:res,error}=await supabase.from(table).upsert(rows,{onConflict}).select("*");
+  const {data:res,error}=await supabase.from(table).insert(rows).select("*");
   if(error) throw error;
   return res||[];
 }
@@ -1459,6 +1459,185 @@ async function importarRespaldoCompletoSupabase(file){
 
 
 
+
+// IMPORTADOR JSON GPSRUTA 3.0 - SIN ON CONFLICT
+function gpsrutaArrayFromBackup(obj,...keys){
+  for(const k of keys){
+    if(Array.isArray(obj?.[k])) return obj[k];
+  }
+  return [];
+}
+function gpsrutaDateClean(v){
+  if(!v) return "";
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  return String(v).slice(0,10);
+}
+function gpsrutaNumberClean(v){
+  if(typeof v==="number") return v;
+  return Number(String(v||"").replace(/\$/g,"").replace(/\./g,"").replace(/,/g,".").replace(/[^\d.-]/g,"")||0);
+}
+async function gpsrutaFindClienteByRut(rut){
+  if(!rut) return null;
+  const {data,error}=await supabase.from("clientes").select("*").eq("rut",rut).maybeSingle();
+  if(error) return null;
+  return data;
+}
+async function gpsrutaFindFacturaByNumero(numero){
+  if(!numero) return null;
+  const {data,error}=await supabase.from("facturas").select("*").eq("numero",numero).maybeSingle();
+  if(error) return null;
+  return data;
+}
+async function gpsrutaSaveClienteManual(payload){
+  const existente=await gpsrutaFindClienteByRut(payload.rut);
+  if(existente?.id){
+    const {data,error}=await supabase.from("clientes").update(payload).eq("id",existente.id).select("*").single();
+    if(error) throw error;
+    return data;
+  }
+  const {data,error}=await supabase.from("clientes").insert(payload).select("*").single();
+  if(error) throw error;
+  return data;
+}
+async function gpsrutaSaveFacturaManual(payload){
+  const existente=await gpsrutaFindFacturaByNumero(payload.numero);
+  if(existente?.id){
+    const {data,error}=await supabase.from("facturas").update(payload).eq("id",existente.id).select("*").single();
+    if(error) throw error;
+    return data;
+  }
+  const {data,error}=await supabase.from("facturas").insert(payload).select("*").single();
+  if(error) throw error;
+  return data;
+}
+async function gpsrutaInsertManySafe(table,payload){
+  const guardados=[];
+  for(const item of payload){
+    try{
+      const {data,error}=await supabase.from(table).insert(item).select("*").single();
+      if(!error && data) guardados.push(data);
+    }catch(e){
+      console.warn("No se pudo insertar en "+table,e);
+    }
+  }
+  return guardados;
+}
+async function importarJsonGpsrutaSupabase(backup){
+  if(!supabase) throw new Error("Supabase no está conectado");
+  const clientesRaw=gpsrutaArrayFromBackup(backup,"clients","clientes");
+  const facturasRaw=gpsrutaArrayFromBackup(backup,"invoices","facturas");
+  const ingresosRaw=gpsrutaArrayFromBackup(backup,"incomes","ingresos");
+  const egresosRaw=gpsrutaArrayFromBackup(backup,"expenses","egresos");
+  const deudasRaw=gpsrutaArrayFromBackup(backup,"debts","deudas");
+  const tareasRaw=gpsrutaArrayFromBackup(backup,"tasks","tareas");
+
+  const clientesGuardados=[];
+  const clienteIdMap=new Map();
+
+  for(const c of clientesRaw){
+    const payload={
+      nombre:String(c.nombre||c.name||"").trim(),
+      rut:String(c.rut||"").trim(),
+      giro:String(c.giro||"").trim(),
+      telefono:String(c.telefono||c.phone||c.whatsapp||"").trim(),
+      email:String(c.email||c.correo||"").trim(),
+      direccion:String(c.direccion||c.address||"").trim(),
+      contacto:String(c.contacto||c.contact||"").trim()
+    };
+    if(!payload.nombre && !payload.rut) continue;
+    try{
+      const guardado=await gpsrutaSaveClienteManual(payload);
+      if(guardado){
+        clientesGuardados.push(mapClienteFromSupabase(guardado));
+        if(c.id) clienteIdMap.set(String(c.id),guardado.id);
+        if(c.rut) clienteIdMap.set(String(c.rut).trim().toLowerCase(),guardado.id);
+        if(c.nombre) clienteIdMap.set(String(c.nombre).trim().toLowerCase(),guardado.id);
+      }
+    }catch(err){
+      console.warn("Cliente no importado",payload,err);
+    }
+  }
+
+  (data.clients||[]).forEach(c=>{
+    if(c.id) clienteIdMap.set(String(c.id),c.id);
+    if(c.rut) clienteIdMap.set(String(c.rut).trim().toLowerCase(),c.id);
+    if(c.nombre) clienteIdMap.set(String(c.nombre).trim().toLowerCase(),c.id);
+  });
+
+  const facturasGuardadas=[];
+  for(const f of facturasRaw){
+    const oldClienteId=String(f.clienteId||f.cliente_id||"");
+    const cid=clienteIdMap.get(oldClienteId) ||
+      clienteIdMap.get(String(f.rut||"").trim().toLowerCase()) ||
+      clienteIdMap.get(String(f.cliente||f.nombre||"").trim().toLowerCase()) ||
+      Number(oldClienteId)||null;
+
+    const payload={
+      cliente_id:cid,
+      numero:String(f.factura||f.numero||f.number||"").trim(),
+      fecha_emision:gpsrutaDateClean(f.emision||f.fecha_emision),
+      fecha_vencimiento:gpsrutaDateClean(f.vencimiento||f.fecha_vencimiento),
+      monto:gpsrutaNumberClean(f.monto),
+      estado:String(f.estado||"Pendiente").trim()||"Pendiente",
+      detalle:String(f.detalle||f.descripcion||"").trim()
+    };
+    if(!payload.numero || !payload.cliente_id) continue;
+    try{
+      const guardada=await gpsrutaSaveFacturaManual(payload);
+      if(guardada) facturasGuardadas.push(mapFacturaFromSupabase(guardada));
+    }catch(err){
+      console.warn("Factura no importada",payload,err);
+    }
+  }
+
+  const ingresosPayload=ingresosRaw.map(i=>({
+    fecha:gpsrutaDateClean(i.fecha||i.date),
+    categoria:String(i.categoria||i.category||"").trim(),
+    descripcion:String(i.descripcion||i.description||i.detalle||"").trim(),
+    monto:gpsrutaNumberClean(i.monto)
+  })).filter(i=>i.fecha||i.descripcion||i.monto);
+
+  const egresosPayload=egresosRaw.map(e=>({
+    fecha:gpsrutaDateClean(e.fecha||e.date),
+    categoria:String(e.categoria||e.category||"").trim(),
+    descripcion:String(e.descripcion||e.description||e.detalle||"").trim(),
+    monto:gpsrutaNumberClean(e.monto)
+  })).filter(e=>e.fecha||e.descripcion||e.monto);
+
+  const deudasPayload=deudasRaw.map(d=>({
+    proveedor:String(d.proveedor||d.provider||"").trim(),
+    descripcion:String(d.descripcion||d.description||d.detalle||"").trim(),
+    vencimiento:gpsrutaDateClean(d.vencimiento||d.dueDate),
+    estado:String(d.estado||d.status||"Pendiente").trim(),
+    monto:gpsrutaNumberClean(d.monto)
+  })).filter(d=>d.proveedor||d.descripcion||d.monto);
+
+  const tareasPayload=tareasRaw.map(t=>({
+    descripcion:String(t.descripcion||t.text||t.tarea||"").trim(),
+    completada:!!(t.completada||t.done||t.completed)
+  })).filter(t=>t.descripcion);
+
+  const ingresosGuardados=await gpsrutaInsertManySafe("ingresos",ingresosPayload);
+  const egresosGuardados=await gpsrutaInsertManySafe("egresos",egresosPayload);
+  const deudasGuardadas=await gpsrutaInsertManySafe("deudas",deudasPayload);
+  const tareasGuardadas=await gpsrutaInsertManySafe("tareas",tareasPayload);
+
+  await cargarClientesFacturasSupabase?.();
+  await cargarEstadoRealSupabase?.();
+
+  return {
+    clientes:clientesGuardados.length,
+    facturas:facturasGuardadas.length,
+    ingresos:ingresosGuardados.length,
+    egresos:egresosGuardados.length,
+    deudas:deudasGuardadas.length,
+    tareas:tareasGuardadas.length,
+    adjuntos:0,
+    rawClientes:clientesRaw.length,
+    rawFacturas:facturasRaw.length
+  };
+}
+
 // IMPORTADOR JSON GPSRUTA 3.0 - acepta respaldo con clients/invoices
 function gpsrutaArrayFromBackup(obj,...keys){
   for(const k of keys){
@@ -1497,7 +1676,7 @@ async function importarJsonGpsrutaSupabase(backup){
 
   let clientesGuardados=[];
   if(clientesPayload.length){
-    const {data:cg,error}=await supabase.from("clientes").upsert(clientesPayload,{onConflict:"rut"}).select("*");
+    const {data:cg,error}=await supabase.from("clientes").insert(clientesPayload).select("*");
     if(error) throw error;
     clientesGuardados=(cg||[]).map(mapClienteFromSupabase);
   }
@@ -1534,7 +1713,7 @@ async function importarJsonGpsrutaSupabase(backup){
 
   let facturasGuardadas=[];
   if(facturasPayload.length){
-    const {data:fg,error}=await supabase.from("facturas").upsert(facturasPayload,{onConflict:"numero"}).select("*");
+    const {data:fg,error}=await supabase.from("facturas").insert(facturasPayload).select("*");
     if(error) throw error;
     facturasGuardadas=(fg||[]).map(mapFacturaFromSupabase);
   }
