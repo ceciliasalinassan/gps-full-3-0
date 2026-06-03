@@ -1300,12 +1300,178 @@ const cloudViewStats={
 };
 
 useEffect(()=>{ if(supabase){ cargarEstadoRealSupabase(); } },[]);
+
+function normalizeSheetRows(ws){
+  return XLSX.utils.sheet_to_json(ws,{defval:""}).map(r=>{
+    const o={};
+    Object.keys(r).forEach(k=>o[String(k).trim()]=r[k]);
+    return o;
+  });
+}
+function pickValue(row,names){
+  for(const n of names){
+    const key=Object.keys(row).find(k=>k.toLowerCase().trim()===n.toLowerCase().trim());
+    if(key!==undefined && row[key]!==undefined && row[key]!==null && String(row[key]).trim()!=="") return row[key];
+  }
+  return "";
+}
+function normalizeMoneyValue(v){
+  if(typeof v==="number") return v;
+  const s=String(v||"").replace(/\$/g,"").replace(/\./g,"").replace(/,/g,".").replace(/[^\d.-]/g,"");
+  return Number(s||0);
+}
+function normalizeDateValue(v){
+  if(!v) return "";
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  if(typeof v==="number"){
+    try{
+      const d=XLSX.SSF.parse_date_code(v);
+      if(d) return `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;
+    }catch(e){}
+  }
+  return String(v).trim();
+}
+async function upsertClientesDesdeRespaldo(rows){
+  const payload=rows.map(r=>({
+    nombre:String(pickValue(r,["Nombre","Cliente","Razón Social","Razon Social"])||"").trim(),
+    rut:String(pickValue(r,["RUT","Rut","rut"])||"").trim(),
+    giro:String(pickValue(r,["Giro"])||"").trim(),
+    telefono:String(pickValue(r,["Teléfono","Telefono","WhatsApp","Telefono/WhatsApp"])||"").trim(),
+    email:String(pickValue(r,["Email","Correo","Correo electrónico","Correo electronico"])||"").trim(),
+    direccion:String(pickValue(r,["Dirección","Direccion"])||"").trim(),
+    contacto:String(pickValue(r,["Contacto"])||"").trim()
+  })).filter(c=>c.nombre||c.rut);
+  if(!payload.length) return [];
+  const {data,error}=await supabase.from("clientes").upsert(payload,{onConflict:"rut"}).select("*");
+  if(error) throw error;
+  return (data||[]).map(mapClienteFromSupabase);
+}
+async function upsertFacturasDesdeRespaldo(rows,clientesActualizados){
+  const clientesIndex=new Map();
+  [...(clientesActualizados||[]),...(data.clients||[])].forEach(c=>{
+    if(c.rut) clientesIndex.set(String(c.rut).trim().toLowerCase(),c);
+    if(c.nombre) clientesIndex.set(String(c.nombre).trim().toLowerCase(),c);
+  });
+  const payload=[];
+  rows.forEach(r=>{
+    const rut=String(pickValue(r,["RUT","Rut"])||"").trim().toLowerCase();
+    const nombre=String(pickValue(r,["Cliente","Nombre"])||"").trim().toLowerCase();
+    const cliente=clientesIndex.get(rut)||clientesIndex.get(nombre);
+    const numero=String(pickValue(r,["N° Factura","Nº Factura","Factura","Numero","Número","N°"])||"").trim();
+    if(!numero) return;
+    payload.push({
+      cliente_id:cliente?.id||Number(pickValue(r,["cliente_id","Cliente ID"])||0)||null,
+      numero,
+      fecha_emision:normalizeDateValue(pickValue(r,["Emisión","Fecha emisión","Fecha emision","emision"])),
+      fecha_vencimiento:normalizeDateValue(pickValue(r,["Vencimiento","Fecha vencimiento","vencimiento"])),
+      monto:normalizeMoneyValue(pickValue(r,["Monto","Total","Valor"])),
+      estado:String(pickValue(r,["Estado"])||"Pendiente").trim()||"Pendiente",
+      detalle:String(pickValue(r,["Detalle","Descripción","Descripcion"])||"").trim()
+    });
+  });
+  const valid=payload.filter(f=>f.numero&&f.cliente_id);
+  if(!valid.length) return [];
+  const {data:inserted,error}=await supabase.from("facturas").upsert(valid,{onConflict:"numero"}).select("*");
+  if(error) throw error;
+  return (inserted||[]).map(mapFacturaFromSupabase);
+}
+async function upsertSimpleTable(table,rows,mapFn,onConflict="id"){
+  if(!rows.length) return [];
+  const {data:res,error}=await supabase.from(table).upsert(rows,{onConflict}).select("*");
+  if(error) throw error;
+  return res||[];
+}
+async function importarRespaldoCompletoSupabase(file){
+  try{
+    if(!file) return;
+    if(!supabase){
+      alert("Supabase no está conectado. No se puede importar respaldo a la nube.");
+      return;
+    }
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:"array",cellDates:true});
+    const getSheet=(names)=>{
+      const found=wb.SheetNames.find(n=>names.some(x=>n.toLowerCase().includes(x.toLowerCase())));
+      return found?normalizeSheetRows(wb.Sheets[found]):[];
+    };
+
+    const clientesRows=getSheet(["Clientes"]);
+    const facturasRows=getSheet(["Facturas"]);
+    const ingresosRows=getSheet(["Ingresos"]);
+    const egresosRows=getSheet(["Egresos"]);
+    const deudasRows=getSheet(["Deudas"]);
+    const tareasRows=getSheet(["Tareas"]);
+    const adjuntosRows=getSheet(["Adjuntos"]);
+
+    const clientesGuardados=await upsertClientesDesdeRespaldo(clientesRows);
+    const facturasGuardadas=await upsertFacturasDesdeRespaldo(facturasRows,clientesGuardados);
+
+    const ingresosPayload=ingresosRows.map(r=>({
+      fecha:normalizeDateValue(pickValue(r,["Fecha"])),
+      categoria:String(pickValue(r,["Categoría","Categoria"])||"").trim(),
+      descripcion:String(pickValue(r,["Descripción","Descripcion","Concepto"])||"").trim(),
+      monto:normalizeMoneyValue(pickValue(r,["Monto"]))
+    })).filter(x=>x.fecha||x.descripcion||x.monto);
+    const egresosPayload=egresosRows.map(r=>({
+      fecha:normalizeDateValue(pickValue(r,["Fecha"])),
+      categoria:String(pickValue(r,["Categoría","Categoria"])||"").trim(),
+      descripcion:String(pickValue(r,["Descripción","Descripcion","Concepto"])||"").trim(),
+      monto:normalizeMoneyValue(pickValue(r,["Monto"]))
+    })).filter(x=>x.fecha||x.descripcion||x.monto);
+    const deudasPayload=deudasRows.map(r=>({
+      proveedor:String(pickValue(r,["Proveedor"])||"").trim(),
+      descripcion:String(pickValue(r,["Descripción","Descripcion"])||"").trim(),
+      vencimiento:normalizeDateValue(pickValue(r,["Vencimiento"])),
+      estado:String(pickValue(r,["Estado"])||"Pendiente").trim(),
+      monto:normalizeMoneyValue(pickValue(r,["Monto"]))
+    })).filter(x=>x.proveedor||x.descripcion||x.monto);
+    const tareasPayload=tareasRows.map(r=>({
+      descripcion:String(pickValue(r,["Tarea","Tarea / Nota","Descripción","Descripcion"])||"").trim(),
+      completada:String(pickValue(r,["Estado"])||"").toLowerCase().includes("complet")
+    })).filter(x=>x.descripcion);
+
+    const ingresosGuardados=await upsertSimpleTable("ingresos",ingresosPayload, null, "id").catch(e=>{console.warn(e);return []});
+    const egresosGuardados=await upsertSimpleTable("egresos",egresosPayload, null, "id").catch(e=>{console.warn(e);return []});
+    const deudasGuardadas=await upsertSimpleTable("deudas",deudasPayload, null, "id").catch(e=>{console.warn(e);return []});
+    const tareasGuardadas=await upsertSimpleTable("tareas",tareasPayload, null, "id").catch(e=>{console.warn(e);return []});
+
+    // Los adjuntos PDF físicos no se pueden reconstruir desde Excel si no viene el archivo PDF.
+    // Sí se cargan metadatos en tabla adjuntos cuando existen factura y path.
+    const facturasIndex=new Map();
+    [...facturasGuardadas,...(data.invoices||[])].forEach(f=>{
+      if(f.factura) facturasIndex.set(String(f.factura).trim(),f);
+      if(f.numero) facturasIndex.set(String(f.numero).trim(),f);
+    });
+    const adjuntosPayload=adjuntosRows.map(r=>{
+      const factura=String(pickValue(r,["Factura","N° Factura","Nº Factura"])||"").trim();
+      const f=facturasIndex.get(factura);
+      return {
+        factura_id:f?.id||Number(pickValue(r,["factura_id","Factura ID"])||0)||null,
+        name:String(pickValue(r,["Nombre archivo","Archivo","Nombre PDF","name"])||"").trim(),
+        size:Number(pickValue(r,["Tamaño","Tamaño bytes","size"])||0)||0,
+        type:String(pickValue(r,["Tipo","type"])||"application/pdf").trim(),
+        path:String(pickValue(r,["Path","Ruta","path"])||"").trim(),
+        sent:String(pickValue(r,["Enviado","PDF enviado"])||"").toLowerCase().startsWith("s")
+      };
+    }).filter(a=>a.factura_id&&a.name&&a.path);
+    const adjuntosGuardados=await upsertSimpleTable("adjuntos",adjuntosPayload,null,"factura_id").catch(e=>{console.warn(e);return []});
+
+    await cargarClientesFacturasSupabase?.();
+    await cargarEstadoRealSupabase?.();
+
+    alert(`Respaldo importado a Supabase.\nClientes: ${clientesGuardados.length}\nFacturas: ${facturasGuardadas.length}\nIngresos: ${ingresosGuardados.length}\nEgresos: ${egresosGuardados.length}\nDeudas: ${deudasGuardadas.length}\nTareas: ${tareasGuardadas.length}\nAdjuntos metadata: ${adjuntosGuardados.length}\n\nNota: los PDF físicos deben subirse nuevamente si no están en Storage.`);
+  }catch(err){
+    console.error("Error importando respaldo a Supabase:",err);
+    alert("Error al importar respaldo a Supabase: "+(err?.message||err));
+  }
+}
+
 if(!logged)return <Login onLogin={()=>setLogged(true)}/>;
 return <div className="app"><aside><Logo/><div className="admin"><User size={24}/><div><b>Bernardo Hernández</b><p>gpsruta007@outlook.com</p></div></div><nav>{[["dashboard","Dashboard",Eye],["clientes","Clientes",Users],["facturas","Facturas por cobrar",FileText],["deudas","Deudas / Facturas por pagar",CreditCard],["ingresos","Ingresos",TrendingUp],["egresos","Egresos",TrendingDown],["alertas","Cobros / Recordatorios",Bell]].map(([v,l,I])=><button key={v} onClick={()=>setTab(v)} className={tab===v?"active":""}><I size={20}/>{l}</button>)}</nav><div className="autosave"><CheckCircle size={20}/><div><b>Guardado automático activo</b><p>Último guardado: {saved}</p></div></div><button className="logout" onClick={()=>{sessionStorage.removeItem(SESSION);setLogged(false)}}><LogOut size={19}/>Cerrar sesión</button></aside><main><header><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, factura o giro..."/></div><div className="chips"><select value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)} className="monthSelect">{months.map(m=><option key={m} value={m}>{ml(m)}</option>)}</select><span><CalendarDays size={17}/>{clock.toLocaleDateString("es-CL")}</span><span><Clock size={17}/>{clock.toLocaleTimeString("es-CL",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span><span className="green"><Save size={17}/>Guardado automático</span></div></header>
 <section className="backupToolbar">
   <button className="backupBtn saveManual" onClick={manualSave}><HardDrive size={17}/>Guardar ahora</button>
   <button className="backupBtn" onClick={exportBackup}><Download size={17}/>Respaldar</button>
-  <label className="backupBtn importBtn"><Upload size={17}/>Importar respaldo<input type="file" accept=".json" onChange={e=>importBackup(e.target.files?.[0])}/></label><div className="reportStatusBox">{reportStatus||"Informe Excel exporta toda la base de datos."}</div><button className="backupBtn reportBtn" onClick={exportExcelCompletoGPSRUTA}>📊 Descargar informe Excel completo</button><span className={`supabaseStatusBadge ${supabase?"ok":"bad"}`}>{supabase?"🟢 Supabase conectado":"🔴 Supabase desconectado"}</span><span className="cloudMiniStatus">{cloudSaveStatus}</span><span className="emailConfigured">📧 Correo cobranza: {SENDER_EMAIL}</span><span className={`emailStatus ${emailSending?"sending":""}`}>{emailSending?"📤 Enviando correo...":"✅ Outlook automático listo"}</span>
+  <label className="backupBtn importBtn"><Upload size={17}/>Importar respaldo a Supabase<input type="file" accept=".json" onChange={e=>importarRespaldoCompletoSupabase(e.target.files?.[0])}/></label><div className="reportStatusBox">{reportStatus||"Informe Excel exporta toda la base de datos."}</div><button className="backupBtn reportBtn" onClick={exportExcelCompletoGPSRUTA}>📊 Descargar informe Excel completo</button><span className={`supabaseStatusBadge ${supabase?"ok":"bad"}`}>{supabase?"🟢 Supabase conectado":"🔴 Supabase desconectado"}</span><span className="cloudMiniStatus">{cloudSaveStatus}</span><span className="emailConfigured">📧 Correo cobranza: {SENDER_EMAIL}</span><span className={`emailStatus ${emailSending?"sending":""}`}>{emailSending?"📤 Enviando correo...":"✅ Outlook automático listo"}</span>
 </section>
 <section className="kpis"><K t="Ingresos del mes" v={money(stats.ingresos)} s={ml(selectedMonth)} icon={TrendingUp}/><K t="Egresos del mes" v={money(stats.egresos)} s={ml(selectedMonth)} icon={TrendingDown} tone="red"/><K t="Deudas por pagar" v={money(stats.deudas)} s="Según vencimiento" icon={CreditCard} tone="gold"/><K t="Facturas pendientes" v={money(stats.pend)} s="Por cobrar" icon={FileText} tone="blue"/><K t="Facturas vencidas" v={stats.venc.length} s="Cantidad mensual" icon={AlertTriangle} tone="red"/></section>
 {tab==="dashboard"&&<section className="gridDash dashboard3d"><div className="card chartPro wide holoCard mainHolo"><div className="holoBadge">HOLOGRAPHIC FINANCE PANEL</div><h2>Resumen financiero mensual 3D</h2><div className="chart compact hologramChart"><ResponsiveContainer><ComposedChart data={monthly} margin={{top:12,right:18,left:0,bottom:0}}><CartesianGrid stroke="rgba(255,255,255,.07)" vertical={false}/><XAxis dataKey="mes" stroke="#ccc" tick={{fontSize:12}}/><YAxis stroke="#ccc" tickFormatter={v=>`${Math.round(v/1000000)}M`} tick={{fontSize:12}}/><Tooltip formatter={v=>money(v)} contentStyle={{background:"#050505",border:"1px solid #FFD43B",borderRadius:"12px"}}/><Legend wrapperStyle={{fontSize:12}}/><Bar dataKey="ingresos" name="Ingresos" fill="#7CFC00" radius={[8,8,0,0]} barSize={20}/><Bar dataKey="egresos" name="Egresos" fill="#ff3131" radius={[8,8,0,0]} barSize={20}/><Bar dataKey="deudas" name="Deudas" fill="#FFD43B" radius={[8,8,0,0]} barSize={20}/><Line type="monotone" dataKey="saldo" name="Saldo neto" stroke="#00a3ff" strokeWidth={4} dot={{r:4,fill:"#00a3ff"}} activeDot={{r:7}}/></ComposedChart></ResponsiveContainer></div></div><div className="card chartPro estadoFacturasCard holoCard sideHolo"><div className="holoBadge small">STATUS SCAN</div><h2>Estado facturas del mes</h2><div className="chart donut hologramDonut"><ResponsiveContainer><PieChart><Pie data={pie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={72} label={({name,value})=>`${name}: ${value}`}>{pie.map((_,i)=><Cell key={i} fill={["#7CFC00","#FFD43B","#ff9500","#ff3131"][i]}/>)}</Pie><Tooltip contentStyle={{background:"#050505",border:"1px solid #00a3ff"}}/></PieChart></ResponsiveContainer></div><div className="estadoFacturasNumeros">{pie.map((p,i)=><div className={`estadoItem estado${i}`} key={p.name}><span></span><b>{p.name}</b><strong>{p.value}</strong></div>)}</div></div><div className="card wide holoCard summaryHolo"><div className="holoBadge small">MONTHLY CORE</div><h2>Resumen del mes seleccionado</h2><div className="summaryGrid">{[[money(stats.ingresos),"Ingresos",""],[money(stats.egresos),"Egresos",""],[money(stats.saldo),"Saldo neto",stats.saldo<0?"negativeBalance":""],[money(stats.deudas),"Deudas por pagar",""],[money(stats.pend),"Facturas por cobrar",""],[stats.venc.length,"Facturas vencidas",""]].map(([a,b,cls])=><div key={b} className={cls}><b>{a}</b><span>{b}</span></div>)}</div></div></section>}
@@ -1465,6 +1631,11 @@ return <div className="app"><aside><Logo/><div className="admin"><User size={24}
   <h2>Conteo real Supabase</h2>
   <p>Los contadores del Estado Nube ahora se calculan desde Supabase. Si la tabla adjuntos está vacía, el sistema mostrará 0 PDFs adjuntos.</p>
   <button className="refreshCloudBtn" onClick={cargarEstadoRealSupabase}>Actualizar datos desde Supabase</button>
+</div>}
+
+{tab==="dashboard"&&<div className="card supabaseDataGuarantee">
+  <h2>Importación real a Supabase</h2>
+  <p>Al cargar un respaldo, el sistema inserta/actualiza clientes, facturas, ingresos, egresos, deudas y tareas directamente en Supabase. Los PDF físicos deben existir en Storage o subirse nuevamente.</p>
 </div>}
 {tab==="clientes"&&<section className="two"><div className="card clientFormSticky"><h2>{editingClient?"Editar cliente":"Nuevo cliente"}</h2>
 <div className="excelImportBox">

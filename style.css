@@ -2459,3 +2459,11 @@ button.icon.mail:hover{
   font-weight:900;
   cursor:pointer;
 }
+
+.supabaseDataGuarantee{
+  margin:12px 0;
+  border-color:rgba(0,255,210,.35)!important;
+  background:rgba(0,255,210,.07)!important;
+}
+.supabaseDataGuarantee h2{color:#00ffd2!important;margin:0 0 6px!important}
+.supabaseDataGuarantee p{color:#dff;font-weight:800}
