@@ -2467,3 +2467,8 @@ button.icon.mail:hover{
 }
 .supabaseDataGuarantee h2{color:#00ffd2!important;margin:0 0 6px!important}
 .supabaseDataGuarantee p{color:#dff;font-weight:800}
+
+.financeSyncPanel{margin:12px 0;border-color:rgba(0,255,210,.35)!important;background:rgba(0,255,210,.07)!important}
+.financeSyncPanel h2{color:#00ffd2!important;margin:0 0 6px!important}
+.financeSyncPanel p{color:#dff;font-weight:800}
+.financeSyncPanel button{margin-top:8px;border:1px solid rgba(0,255,210,.35);background:rgba(0,255,210,.10);color:#00ffd2;border-radius:12px;padding:9px 12px;font-weight:900;cursor:pointer}

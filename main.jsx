@@ -836,6 +836,7 @@ async function addTask(){
     setData({...data,tasks:[task,...(data.tasks||[])]});
     setTaskText("");
     confirmCloudSaved("Tarea");
+if(typeof cargarFinanzasSupabase==="function") cargarFinanzasSupabase();
 alert("Tarea guardada correctamente en la nube.");
   }catch(err){
     console.error("Error al guardar tarea:",err);
@@ -1814,6 +1815,47 @@ async function importarJsonGpsrutaSupabase(backup){
   };
 }
 
+
+function mapIngresoFromSupabase(r){
+  return {id:r.id,fecha:r.fecha||r.created_at||"",categoria:r.categoria||"",descripcion:r.descripcion||r.detalle||"",monto:Number(r.monto||0),tipo:r.tipo||"Ingreso"};
+}
+function mapEgresoFromSupabase(r){
+  return {id:r.id,fecha:r.fecha||r.created_at||"",categoria:r.categoria||"",descripcion:r.descripcion||r.detalle||"",monto:Number(r.monto||0),tipo:r.tipo||"Egreso"};
+}
+function mapDeudaFromSupabase(r){
+  return {id:r.id,proveedor:r.proveedor||"",descripcion:r.descripcion||r.detalle||"",vencimiento:r.vencimiento||"",monto:Number(r.monto||0),estado:r.estado||"Pendiente"};
+}
+function mapTareaFromSupabase(r){
+  return {id:r.id,descripcion:r.descripcion||"",done:!!(r.completada||r.done),completada:!!(r.completada||r.done),createdAt:r.created_at||""};
+}
+async function cargarFinanzasSupabase(){
+  try{
+    if(!supabase) return;
+    const [ingresosRes,egresosRes,deudasRes,tareasRes]=await Promise.all([
+      supabase.from("ingresos").select("*").order("id",{ascending:false}),
+      supabase.from("egresos").select("*").order("id",{ascending:false}),
+      supabase.from("deudas").select("*").order("id",{ascending:false}),
+      supabase.from("tareas").select("*").order("id",{ascending:false})
+    ]);
+    if(ingresosRes.error) throw ingresosRes.error;
+    if(egresosRes.error) throw egresosRes.error;
+    if(deudasRes.error) throw deudasRes.error;
+    if(tareasRes.error) throw tareasRes.error;
+    setData(prev=>({
+      ...prev,
+      incomes:(ingresosRes.data||[]).map(mapIngresoFromSupabase),
+      expenses:(egresosRes.data||[]).map(mapEgresoFromSupabase),
+      debts:(deudasRes.data||[]).map(mapDeudaFromSupabase),
+      tasks:(tareasRes.data||[]).map(mapTareaFromSupabase)
+    }));
+    if(typeof confirmCloudSaved==="function") confirmCloudSaved("Ingresos y egresos cargados");
+  }catch(err){
+    console.error("Error cargando ingresos/egresos desde Supabase:",err);
+    alert("Error al cargar ingresos/egresos desde Supabase: "+(err?.message||err));
+  }
+}
+
+useEffect(()=>{ if(supabase){ cargarFinanzasSupabase(); } },[]);
 if(!logged)return <Login onLogin={()=>setLogged(true)}/>;
 return <div className="app"><aside><Logo/><div className="admin"><User size={24}/><div><b>Bernardo Hernández</b><p>gpsruta007@outlook.com</p></div></div><nav>{[["dashboard","Dashboard",Eye],["clientes","Clientes",Users],["facturas","Facturas por cobrar",FileText],["deudas","Deudas / Facturas por pagar",CreditCard],["ingresos","Ingresos",TrendingUp],["egresos","Egresos",TrendingDown],["alertas","Cobros / Recordatorios",Bell]].map(([v,l,I])=><button key={v} onClick={()=>setTab(v)} className={tab===v?"active":""}><I size={20}/>{l}</button>)}</nav><div className="autosave"><CheckCircle size={20}/><div><b>Guardado automático activo</b><p>Último guardado: {saved}</p></div></div><button className="logout" onClick={()=>{sessionStorage.removeItem(SESSION);setLogged(false)}}><LogOut size={19}/>Cerrar sesión</button></aside><main><header><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, factura o giro..."/></div><div className="chips"><select value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)} className="monthSelect">{months.map(m=><option key={m} value={m}>{ml(m)}</option>)}</select><span><CalendarDays size={17}/>{clock.toLocaleDateString("es-CL")}</span><span><Clock size={17}/>{clock.toLocaleTimeString("es-CL",{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span><span className="green"><Save size={17}/>Guardado automático</span></div></header>
 <section className="backupToolbar">
@@ -1984,6 +2026,12 @@ return <div className="app"><aside><Logo/><div className="admin"><User size={24}
 {tab==="dashboard"&&<div className="card supabaseDataGuarantee">
   <h2>Importación real a Supabase</h2>
   <p>Al cargar un respaldo, el sistema inserta/actualiza clientes, facturas, ingresos, egresos, deudas y tareas directamente en Supabase. Los PDF físicos deben existir en Storage o subirse nuevamente.</p>
+</div>}
+
+{tab==="dashboard"&&<div className="card financeSyncPanel">
+  <h2>Finanzas desde Supabase</h2>
+  <p>Ingresos, egresos, deudas y tareas se cargan directamente desde Supabase para que el dashboard muestre valores reales.</p>
+  <button onClick={cargarFinanzasSupabase}>Actualizar finanzas desde Supabase</button>
 </div>}
 {tab==="clientes"&&<section className="two"><div className="card clientFormSticky"><h2>{editingClient?"Editar cliente":"Nuevo cliente"}</h2>
 <div className="excelImportBox">
